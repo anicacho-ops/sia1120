@@ -19,3 +19,32 @@ create table if not exists public.users (
 
 -- 요청에 따라 RLS 비활성화 (프로토타입 전용)
 alter table public.users disable row level security;
+
+grant usage on schema public to anon;
+grant select, insert, update on public.users to anon;
+
+-- ─────────────────────────────────────────────────────────────
+-- 참조문헌 (지침 문서) 테이블 — 문서 관리 화면에서 업로드 시 저장
+-- PRD 섹션 6 Document 모델 기반
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  source_type text not null default 'INTERNAL'
+    check (source_type in ('INTERNAL', 'KDCA', 'INTERNATIONAL', 'ICCON', 'FAQ')),
+  category text,
+  version int not null default 1,
+  status text not null default 'IN_REVIEW'
+    check (status in ('DRAFT', 'IN_REVIEW', 'APPROVED', 'ARCHIVED')),
+  file_name text,
+  revised_at date,
+  uploaded_by text,
+  approved_by text,
+  approved_at timestamptz,
+  chunk_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.documents disable row level security;
+grant select, insert, update on public.documents to anon;
