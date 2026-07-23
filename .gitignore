@@ -37,6 +37,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# 지식베이스 원본 PDF (용량이 커서 저장소에 올리지 않음)
+/knowledge_base/*.pdf
+
+# Claude Code 로컬 설정
+.claude/settings.local.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

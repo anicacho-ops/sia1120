@@ -9,10 +9,6 @@ import { getSessionUser, signOut, type SessionUser } from "@/lib/auth";
 import { MessageBubble } from "./MessageBubble";
 import { SourcePanel } from "./SourcePanel";
 
-// UI 데모용 스트리밍 응답 (백엔드/지식베이스는 이후 Supabase 연동으로 대체)
-const DEMO_ANSWER =
-  "지금은 UI 미리보기 상태로, 지식베이스가 아직 연결되지 않았습니다. 실제 배포 시에는 승인된 감염관리 지침에서 근거 문단을 검색해 출처와 함께 답변을 생성합니다. 근거가 부족하면 임의로 답하지 않고 감염관리실 문의를 안내합니다.";
-
 export function ChatWorkspace() {
   const router = useRouter();
   const [sessions, setSessions] = useState<ChatSession[]>(seedSessions);
@@ -66,11 +62,32 @@ export function ChatWorkspace() {
     );
   }
 
-  function send() {
+  // 특정 세션의 어시스턴트 메시지 갱신 헬퍼
+  function patchMessage(
+    sessionId: string,
+    messageId: string,
+    patch: Partial<Message>,
+  ) {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id !== sessionId
+          ? s
+          : {
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === messageId ? { ...m, ...patch } : m,
+              ),
+            },
+      ),
+    );
+  }
+
+  async function send() {
     const text = input.trim();
     if (!text || streaming) return;
     setInput("");
 
+    const sessionId = activeId;
     const userMsg: Message = {
       id: `u${Date.now()}`,
       role: "USER",
@@ -78,6 +95,13 @@ export function ChatWorkspace() {
       createdAt: new Date().toISOString(),
     };
     const assistantId = `a${Date.now()}`;
+
+    // 최근 대화 맥락 (직전까지의 메시지)
+    const history = active.messages.map((m) => ({
+      role: m.role === "USER" ? "user" : "assistant",
+      content: m.content,
+    }));
+
     updateActive((s) => ({
       ...s,
       title: s.messages.length === 0 ? text.slice(0, 24) : s.title,
@@ -93,44 +117,64 @@ export function ChatWorkspace() {
       ],
     }));
 
-    // 토큰 스트리밍 시뮬레이션
     setStreaming(true);
-    const tokens = DEMO_ANSWER.split(" ");
-    let i = 0;
-    const timer = setInterval(() => {
-      i += 1;
-      const partial = tokens.slice(0, i).join(" ");
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id !== activeId
-            ? s
-            : {
-                ...s,
-                messages: s.messages.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: partial, isFallback: true }
-                    : m,
-                ),
-              },
-        ),
-      );
-      if (i >= tokens.length) {
-        clearInterval(timer);
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id !== activeId
-              ? s
-              : {
-                  ...s,
-                  messages: s.messages.map((m) =>
-                    m.id === assistantId ? { ...m, latencyMs: 2400 } : m,
-                  ),
-                },
-          ),
-        );
-        setStreaming(false);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text, history }),
+      });
+      if (!res.ok || !res.body) throw new Error(`요청 실패: ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let acc = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          const eventType = lines
+            .find((l) => l.startsWith("event:"))
+            ?.slice(6)
+            .trim();
+          const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
+          if (!eventType || !dataLine) continue;
+          const data = JSON.parse(dataLine);
+
+          if (eventType === "token") {
+            acc += data.text;
+            patchMessage(sessionId, assistantId, { content: acc });
+          } else if (eventType === "citations") {
+            patchMessage(sessionId, assistantId, { citations: data.citations });
+          } else if (eventType === "done") {
+            patchMessage(sessionId, assistantId, {
+              latencyMs: data.latency_ms,
+              isFallback: data.is_fallback,
+              isBlocked: data.is_blocked,
+            });
+          } else if (eventType === "error") {
+            patchMessage(sessionId, assistantId, {
+              content:
+                "답변 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+              isFallback: true,
+            });
+          }
+        }
       }
-    }, 40);
+    } catch {
+      patchMessage(sessionId, assistantId, {
+        content: "서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        isFallback: true,
+      });
+    } finally {
+      setStreaming(false);
+    }
   }
 
   return (
