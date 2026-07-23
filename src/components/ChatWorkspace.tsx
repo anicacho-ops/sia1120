@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ChatSession, Message } from "@/lib/types";
-import { sessions as seedSessions, currentUser } from "@/lib/mock";
+import { sessions as seedSessions } from "@/lib/mock";
+import { getSessionUser, signOut, type SessionUser } from "@/lib/auth";
 import { MessageBubble } from "./MessageBubble";
 import { SourcePanel } from "./SourcePanel";
 
@@ -12,11 +14,22 @@ const DEMO_ANSWER =
   "지금은 UI 미리보기 상태로, 지식베이스가 아직 연결되지 않았습니다. 실제 배포 시에는 승인된 감염관리 지침에서 근거 문단을 검색해 출처와 함께 답변을 생성합니다. 근거가 부족하면 임의로 답하지 않고 감염관리실 문의를 안내합니다.";
 
 export function ChatWorkspace() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<ChatSession[]>(seedSessions);
   const [activeId, setActiveId] = useState<string>(seedSessions[0].id);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setUser(getSessionUser());
+  }, []);
+
+  function handleSignOut() {
+    signOut();
+    router.replace("/login");
+  }
 
   const active = sessions.find((s) => s.id === activeId) ?? sessions[0];
   const lastAssistant = [...active.messages]
@@ -180,14 +193,23 @@ export function ChatWorkspace() {
           </Link>
           <div className="flex items-center gap-2 px-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-xs font-bold">
-              {currentUser.name[0]}
+              {user?.name?.[0] ?? "?"}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{currentUser.name}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {user?.name ?? "…"}
+              </p>
               <p className="truncate text-[11px] text-muted">
-                {currentUser.department} · {currentUser.role}
+                {user ? `${user.department ?? "소속 미지정"} · ${user.role}` : ""}
               </p>
             </div>
+            <button
+              onClick={handleSignOut}
+              title="로그아웃"
+              className="rounded-md px-1.5 py-1 text-xs text-muted transition hover:bg-surface-2 hover:text-danger"
+            >
+              나가기
+            </button>
           </div>
         </div>
       </aside>

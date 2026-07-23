@@ -16,7 +16,7 @@
 
 ## 화면
 
-- `/login` — 로그인
+- `/login` — 로그인 / 회원가입 (로그인해야 아래 화면 진입 가능)
 - `/chat` — 채팅 Q&A (세션 사이드바 · 스트리밍 답변 · 인용 칩 · 출처 패널)
 - `/admin` — 통계 대시보드
 - `/admin/documents` — 문서 관리 (업로드/승인/재색인)
@@ -41,6 +41,17 @@ http://localhost:3000 에서 확인.
 - `OPENAI_API_KEY` — OpenAI 키
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` — 서버 전용
+
+## 인증 (프로토타입)
+
+- 회원가입 시 회원 정보가 Supabase `public.users` 테이블에 저장됩니다.
+- 테이블 생성: Supabase 대시보드 > SQL Editor 에서 `supabase/schema.sql` 실행.
+- Supabase 미설정 시 로그인 화면에서 **데모 모드**로 UI를 둘러볼 수 있습니다.
+
+> ⚠ 현재 RLS 없이 anon key로 직접 접근합니다 (요청 사양).
+> `NEXT_PUBLIC_*` 값은 브라우저 번들에 포함되어 공개되므로, anon key는
+> 숨겨지지 않습니다 — 공개 배포 후 실사용 전에 **Supabase Auth + RLS 전환 필수**.
+> 비밀번호는 SHA-256 해시로 저장되지만 이는 임시 조치입니다.
 
 ## 참고자료 (외부 출처)
 
