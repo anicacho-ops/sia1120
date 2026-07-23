@@ -7,6 +7,7 @@ const tabs = [
   { href: "/admin", label: "통계" },
   { href: "/admin/documents", label: "문서 관리" },
   { href: "/admin/feedback", label: "피드백 검토" },
+  { href: "/admin/users", label: "회원 관리" },
 ];
 
 export function AdminNav() {
